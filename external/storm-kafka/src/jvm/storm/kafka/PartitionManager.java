@@ -68,9 +68,13 @@ public class PartitionManager {
         _stormConf = stormConf;
         numberAcked = numberFailed = numFailedSkipped = numRemovedFromPendingBCMaxOffsetBehind = 0;
 
-        _failedMsgRetryManager = new ExponentialBackoffMsgRetryManager(_spoutConfig.retryInitialDelayMs,
-                                                                           _spoutConfig.retryDelayMultiplier,
-                                                                           _spoutConfig.retryDelayMaxMs);
+        long retryInitialDelayMs = 10l;
+        double retryDelayMultiplier = 10d;
+        long retryDelayMaxMs = Long.MAX_VALUE;
+        
+        _failedMsgRetryManager = new ExponentialBackoffMsgRetryManager(retryInitialDelayMs,
+														        		retryDelayMultiplier,
+														        		retryDelayMaxMs);
 
         String jsonTopologyId = null;
         Long jsonOffset = null;
@@ -167,7 +171,7 @@ public class PartitionManager {
         ByteBufferMessageSet msgs = null;
         try {
             msgs = KafkaUtils.fetchMessages(_spoutConfig, _consumer, _partition, offset);
-        } catch (TopicOffsetOutOfRangeException e) {
+        } catch (UpdateOffsetException e) {
             _emittedToOffset = KafkaUtils.getOffset(_consumer, _spoutConfig.topic, _partition.partition, kafka.api.OffsetRequest.EarliestTime());
             LOG.warn("Using new offset: {}", _emittedToOffset);
             // fetch failed, so don't update the metrics
