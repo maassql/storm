@@ -57,7 +57,8 @@ public class KafkaSpout extends BaseRichSpout {
     PartitionCoordinator _coordinator;
     DynamicPartitionConnections _connections;
     ZkState _state;
-
+    KafkaSpoutMetrics _metricOfKafkaSpout;
+    
     long _lastUpdateMs = 0;
 
     int _currPartitionIndex = 0;
@@ -94,6 +95,8 @@ public class KafkaSpout extends BaseRichSpout {
             _coordinator = new ZkCoordinator(_connections, conf, _spoutConfig, _state, context.getThisTaskIndex(), totalTasks, _uuid);
         }
 
+        _metricOfKafkaSpout = KafkaSpoutMetrics.registerMetric(context, _spoutConfig, conf, _coordinator);
+        
         context.registerMetric("kafkaOffset", new IMetric() {
             KafkaUtils.KafkaOffsetMetric _kafkaOffsetMetric = new KafkaUtils.KafkaOffsetMetric(_spoutConfig.topic, _connections);
 
@@ -157,21 +160,32 @@ public class KafkaSpout extends BaseRichSpout {
         }
     }
 
+    
+    
     @Override
     public void ack(Object msgId) {
         KafkaMessageId id = (KafkaMessageId) msgId;
         PartitionManager m = _coordinator.getManager(id.partition);
         if (m != null) {
             m.ack(id.offset);
+            _metricOfKafkaSpout.anotherMessageAckd(id);
         }
+        else {
+        	_metricOfKafkaSpout.anotherUntrackedMessageAck(id);
+        }	
     }
 
+    
     @Override
     public void fail(Object msgId) {
         KafkaMessageId id = (KafkaMessageId) msgId;
         PartitionManager m = _coordinator.getManager(id.partition);
         if (m != null) {
             m.fail(id.offset);
+            _metricOfKafkaSpout.anotherMessageFailed(id);
+        }
+        else {
+        	_metricOfKafkaSpout.anotherUntrackedMessageFail(id);
         }
     }
 
