@@ -38,6 +38,8 @@ import java.util.*;
 public class PartitionManager {
     public static final Logger LOG = LoggerFactory.getLogger(PartitionManager.class);
 
+    private final KafkaErrorMetric _kErrorMetric ;
+    
     private final CombinedMetric _fetchAPILatencyMax;
     private final ReducedMetric _fetchAPILatencyMean;
     private final CountMetric _fetchAPICallCount;
@@ -57,7 +59,7 @@ public class PartitionManager {
     DynamicPartitionConnections _connections;
     ZkState _state;
     Map _stormConf;
-    long numberFailed, numberAcked, numFailedSkipped, numRemovedFromPendingBCMaxOffsetBehind ;
+    long numberFailed, numberAcked, numFailedSkipped_was_lt_maxOffsetBehind, numRemovedFromPendingBCMaxOffsetBehind, numAckedSkipped_was_lt_maxOffsetBehind, numEmitted ;
     public PartitionManager(DynamicPartitionConnections connections, String topologyInstanceId, ZkState state, Map stormConf, SpoutConfig spoutConfig, Partition id) {
         _partition = id;
         _connections = connections;
@@ -66,8 +68,10 @@ public class PartitionManager {
         _consumer = connections.register(id.host, id.partition);
         _state = state;
         _stormConf = stormConf;
-        numberAcked = numberFailed = numFailedSkipped = numRemovedFromPendingBCMaxOffsetBehind = 0;
-
+        numberAcked = numberFailed = numFailedSkipped_was_lt_maxOffsetBehind = numRemovedFromPendingBCMaxOffsetBehind = numAckedSkipped_was_lt_maxOffsetBehind = numEmitted = 0;
+        _kErrorMetric = new KafkaErrorMetric("");
+        
+        
         long retryInitialDelayMs = 10l;
         double retryDelayMultiplier = 10d;
         long retryDelayMaxMs = Long.MAX_VALUE;
@@ -152,6 +156,7 @@ public class PartitionManager {
             if (tups != null) {
                 for (List<Object> tup : tups) {
                     collector.emit(tup, new KafkaMessageId(_partition, toEmit.offset));
+                    numEmitted++;
                 }
                 break;
             } else {
@@ -179,7 +184,7 @@ public class PartitionManager {
 
         ByteBufferMessageSet msgs = null;
         try {
-            msgs = KafkaUtils.fetchMessages(_spoutConfig, _consumer, _partition, offset);
+            msgs = KafkaUtils.fetchMessages(_spoutConfig, _consumer, _partition, offset, _kErrorMetric);
         } catch (UpdateOffsetException e) {
             _emittedToOffset = KafkaUtils.getOffset(_consumer, _spoutConfig.topic, _partition.partition, kafka.api.OffsetRequest.EarliestTime());
             LOG.warn("Using new offset: {}", _emittedToOffset);
@@ -224,6 +229,7 @@ public class PartitionManager {
         	SortedMap toRemove = _pending.headMap(offset - _spoutConfig.maxOffsetBehind);
         	numRemovedFromPendingBCMaxOffsetBehind = numRemovedFromPendingBCMaxOffsetBehind + toRemove.size();
         	toRemove.clear(); //changes in toRemove are reflected in _pending which backs toRemove.
+        	numAckedSkipped_was_lt_maxOffsetBehind ++; //only 1 of these records was actually an ack...
         }
         _pending.remove(offset);
         this._failedMsgRetryManager.acked(offset);
@@ -237,7 +243,9 @@ public class PartitionManager {
                             " because it's more than maxOffsetBehind=" + _spoutConfig.maxOffsetBehind +
                             " behind _emittedToOffset=" + _emittedToOffset
             );
-            numFailedSkipped++;
+            numFailedSkipped_was_lt_maxOffsetBehind++;
+            _pending.remove(offset);
+            numRemovedFromPendingBCMaxOffsetBehind++;
         } else {
             LOG.debug("failing at offset=" + offset + " with _pending.size()=" + _pending.size() + " pending and _emittedToOffset=" + _emittedToOffset);
             numberFailed++;
@@ -300,12 +308,18 @@ public class PartitionManager {
         }
     }
     
-    public int countOfTuplesPending() { return this._pending.size() ; }
-    public long countOfTuplesAcked() { return this.numberAcked ; }
-    public long countOfTuplesFailed() { return this.numberFailed ; }
-    public long countOfTuplesFailedSkipped() { return this.numFailedSkipped ; }
-    public long countOfTuplesRemovedFromPendingBCMaxOffsetBehind() { return this.numRemovedFromPendingBCMaxOffsetBehind ; }
-    public int countOfTuplesWaitingToRetry() { return this._failedMsgRetryManager.countOfTuplesWaitingToRetry(); }
-    public int countOfTuplesRetrying() {return this._failedMsgRetryManager.countOfTuplesRetrying(); }
-    public long countOfTuplesSuccessfullyRetried () { return this._failedMsgRetryManager.countOfTuplesSuccessfullyRetried();}
+    
+    public int currentCountOfTuplesPending() { return this._pending.size() ; }
+    public int currentCountOfTuplesWaitingToEmit() { return this._waitingToEmit.size() ; }
+    public long totalOfTuplesEmitted() {return this.numEmitted;}
+    public long totalOfTuplesAcked() { return this.numberAcked ; }
+    public long totalOfTuplesFailed() { return this.numberFailed ; }
+    public long totalOfTuplesFailedSkipped_was_lt_MaxOffsetBehind() { return this.numFailedSkipped_was_lt_maxOffsetBehind ; }
+    public long totalOfTuplesAckSkipped_was_lt_MaxOffsetBehind() { return this.numAckedSkipped_was_lt_maxOffsetBehind ; }
+    public long totalOfTuplesPendingRemoved_was_lt_MaxOffsetBehind() { return this.numRemovedFromPendingBCMaxOffsetBehind ; }
+    public int currentCountOfTuplesWaitingToRetry() { return this._failedMsgRetryManager.countOfTuplesWaitingToRetry(); }
+    public int currentCountOfTuplesRetrying() {return this._failedMsgRetryManager.countOfTuplesRetrying(); }
+    public long totalOfTuplesSuccessfullyRetried () { return this._failedMsgRetryManager.countOfTuplesSuccessfullyRetried();}
+    public long totalOfRetryAttempts() { return this._failedMsgRetryManager.countOfRetryAttempts(); }
+    public KafkaErrorMetric kafkaErrorMetric() { return this._kErrorMetric; }
 }
