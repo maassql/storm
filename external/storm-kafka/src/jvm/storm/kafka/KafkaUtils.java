@@ -156,6 +156,11 @@ public class KafkaUtils {
     }
 
     public static ByteBufferMessageSet fetchMessages(KafkaConfig config, SimpleConsumer consumer, Partition partition, long offset) throws UpdateOffsetException {
+    	KafkaErrorMetric metric = new KafkaErrorMetric ("useless");
+    	return fetchMessages(config,  consumer,  partition,  offset,  metric);
+    }
+    
+    public static ByteBufferMessageSet fetchMessages(KafkaConfig config, SimpleConsumer consumer, Partition partition, long offset, KafkaErrorMetric metric) throws UpdateOffsetException {
         ByteBufferMessageSet msgs = null;
         String topic = config.topic;
         int partitionId = partition.partition;
@@ -172,13 +177,17 @@ public class KafkaUtils {
                     e instanceof UnresolvedAddressException
                     ) {
                 LOG.warn("Network error when fetching messages:", e);
+                metric.incrByException(e);
                 throw new FailedFetchException(e);
             } else {
+            	metric.incrByException(e);
                 throw new RuntimeException(e);
             }
         }
         if (fetchResponse.hasError()) {
-            KafkaError error = KafkaError.getError(fetchResponse.errorCode(topic, partitionId));
+        	short kafkaErrorCode =  fetchResponse.errorCode(topic, partitionId);
+            KafkaError error = KafkaError.getError(kafkaErrorCode);
+            metric.incrByKafkaError(kafkaErrorCode);
             if (error.equals(KafkaError.OFFSET_OUT_OF_RANGE) && config.useStartOffsetTimeIfOffsetOutOfRange) {
                 LOG.warn("Got fetch request with offset out of range: [" + offset + "]; " +
                         "retrying with default start offset time from configuration. " +
