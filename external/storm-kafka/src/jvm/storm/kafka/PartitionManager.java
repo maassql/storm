@@ -122,13 +122,22 @@ public class PartitionManager {
 
     public Map getMetricsDataMap() {
         Map ret = new HashMap();
-        ret.put(_partition + "/fetchAPILatencyMax", _fetchAPILatencyMax.getValueAndReset());
-        ret.put(_partition + "/fetchAPILatencyMean", _fetchAPILatencyMean.getValueAndReset());
-        ret.put(_partition + "/fetchAPICallCount", _fetchAPICallCount.getValueAndReset());
-        ret.put(_partition + "/fetchAPIMessageCount", _fetchAPIMessageCount.getValueAndReset());
+        ret.put( partitionMetricPath (_partition , "fetchAPILatencyMax" ), _fetchAPILatencyMax.getValueAndReset());
+        ret.put( partitionMetricPath (_partition , "fetchAPILatencyMean" ), _fetchAPILatencyMean.getValueAndReset());
+        ret.put( partitionMetricPath (_partition ,  "fetchAPICallCount" ), _fetchAPICallCount.getValueAndReset());
+        ret.put( partitionMetricPath (_partition , "fetchAPIMessageCount" ), _fetchAPIMessageCount.getValueAndReset());
         return ret;
     }
 
+    
+ 
+    private String partitionMetricPath(Partition p, String key)
+    {
+    	return _spoutConfig.topic + "/" +  p.host.toString() + "/partition_" + p.partition + "/" + key ;
+    }
+    
+
+    
     //returns false if it's reached the end of current batch
     public EmitState next(SpoutOutputCollector collector) {
         if (_waitingToEmit.isEmpty()) {
