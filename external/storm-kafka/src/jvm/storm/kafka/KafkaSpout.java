@@ -95,37 +95,8 @@ public class KafkaSpout extends BaseRichSpout {
             _coordinator = new ZkCoordinator(_connections, conf, _spoutConfig, _state, context.getThisTaskIndex(), totalTasks, _uuid);
         }
 
-        _metricOfKafkaSpout = KafkaSpoutMetrics.registerMetric(context, _spoutConfig, conf, _coordinator);
-        
-        context.registerMetric("kafkaOffset", new IMetric() {
-            KafkaUtils.KafkaOffsetMetric _kafkaOffsetMetric = new KafkaUtils.KafkaOffsetMetric(_spoutConfig.topic, _connections);
+        _metricOfKafkaSpout = KafkaSpoutMetrics.registerMetric(context, _spoutConfig, conf, _coordinator, _connections);
 
-            @Override
-            public Object getValueAndReset() {
-                List<PartitionManager> pms = _coordinator.getMyManagedPartitions();
-                Set<Partition> latestPartitions = new HashSet();
-                for (PartitionManager pm : pms) {
-                    latestPartitions.add(pm.getPartition());
-                }
-                _kafkaOffsetMetric.refreshPartitions(latestPartitions);
-                for (PartitionManager pm : pms) {
-                    _kafkaOffsetMetric.setLatestEmittedOffset(pm.getPartition(), pm.lastCompletedOffset());
-                }
-                return _kafkaOffsetMetric.getValueAndReset();
-            }
-        }, _spoutConfig.metricsTimeBucketSizeInSecs);
-
-        context.registerMetric("kafkaPartition", new IMetric() {
-            @Override
-            public Object getValueAndReset() {
-                List<PartitionManager> pms = _coordinator.getMyManagedPartitions();
-                Map concatMetricsDataMaps = new HashMap();
-                for (PartitionManager pm : pms) {
-                    concatMetricsDataMaps.putAll(pm.getMetricsDataMap());
-                }
-                return concatMetricsDataMaps;
-            }
-        }, _spoutConfig.metricsTimeBucketSizeInSecs);
     }
 
     @Override
@@ -205,5 +176,4 @@ public class KafkaSpout extends BaseRichSpout {
             manager.commit();
         }
     }
-
 }
