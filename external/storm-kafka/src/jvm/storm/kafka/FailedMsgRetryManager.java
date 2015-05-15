@@ -26,4 +26,5 @@ public interface FailedMsgRetryManager {
     public int countOfTuplesWaitingToRetry();
     public int countOfTuplesRetrying();
     public long countOfTuplesSuccessfullyRetried();
+    public long countOfRetryAttempts();
 }

@@ -29,6 +29,7 @@ public class ExponentialBackoffMsgRetryManager implements FailedMsgRetryManager 
     private final double retryDelayMultiplier;
     private final long retryDelayMaxMs;
     private long _countOfTuplesSuccessfullyRetried;
+    private long _countOfRetryAttempts;
 
     private Queue<MessageRetryRecord> waiting = new PriorityQueue<MessageRetryRecord>(11, new RetryTimeComparator());
     private Map<Long,MessageRetryRecord> records = new HashMap<Long,MessageRetryRecord>(); //key = offset
@@ -37,7 +38,7 @@ public class ExponentialBackoffMsgRetryManager implements FailedMsgRetryManager 
         this.retryInitialDelayMs = retryInitialDelayMs;
         this.retryDelayMultiplier = retryDelayMultiplier;
         this.retryDelayMaxMs = retryDelayMaxMs;
-        this._countOfTuplesSuccessfullyRetried = 0;
+        this._countOfTuplesSuccessfullyRetried = _countOfRetryAttempts = 0;
     }
 
     @Override
@@ -55,8 +56,8 @@ public class ExponentialBackoffMsgRetryManager implements FailedMsgRetryManager 
         MessageRetryRecord record = this.records.remove(offset);
         if (record != null) {
             this.waiting.remove(record);
+            _countOfTuplesSuccessfullyRetried++;
         }
-        _countOfTuplesSuccessfullyRetried++;
     }
 
     @Override
@@ -66,6 +67,7 @@ public class ExponentialBackoffMsgRetryManager implements FailedMsgRetryManager 
             throw new IllegalStateException("cannot retry a message that has not failed");
         } else {
             this.waiting.remove(record);
+            _countOfRetryAttempts++;
         }
     }
 
@@ -94,15 +96,10 @@ public class ExponentialBackoffMsgRetryManager implements FailedMsgRetryManager 
                 System.currentTimeMillis() >= record.retryTimeUTC;
     }
 
-    public int countOfTuplesWaitingToRetry (){
-    	return this.waiting.size();
-    }
-    public int countOfTuplesRetrying (){
-    	return this.records.size() - countOfTuplesWaitingToRetry();
-    }
-    public long countOfTuplesSuccessfullyRetried() {
-    	return _countOfTuplesSuccessfullyRetried;
-    }
+    public int countOfTuplesWaitingToRetry (){ return this.waiting.size(); }
+    public int countOfTuplesRetrying (){ return this.records.size() - countOfTuplesWaitingToRetry(); }
+    public long countOfTuplesSuccessfullyRetried() { return _countOfTuplesSuccessfullyRetried; }
+    public long countOfRetryAttempts() {return _countOfRetryAttempts;}
     
     /**
      * A MessageRetryRecord holds the data of how many times a message has
@@ -177,4 +174,5 @@ public class ExponentialBackoffMsgRetryManager implements FailedMsgRetryManager 
             return false;
         }
     }
+
 }
