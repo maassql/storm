@@ -32,6 +32,7 @@ public class KafkaSpoutMetrics implements IMetric {
     long _tuplesTotal_Failed_Retry_Retrying = 0;
     long _tuplesTotal_Failed_Retry_Successful = 0;
     long _tuplesTotal_Failed_Retry_Total = 0;    
+    Boolean _debugSpoutMetrics;;
     
     @Override
     public Object getValueAndReset() 
@@ -40,10 +41,12 @@ public class KafkaSpoutMetrics implements IMetric {
 		
 		_metrics_to_report_kafkaErrors = new RubeGoldbergMetrics();
 		
-		//getMetricsPerPartitionManager();
+		if (  _debugSpoutMetrics == false )
+        {
+			getMetricsPerPartitionManager();
+        }
 		getInternallyManagedMetrics();
 
-		// gather metrics from the RubeGolbergMetrics machine
 		ret.putAll(_metrics_to_report.getMetricsAndReset());
 		
 		ret.putAll(_metrics_to_report_kafkaErrors.getMetricsAndReset());
@@ -51,25 +54,27 @@ public class KafkaSpoutMetrics implements IMetric {
 		return ret;
     }    
 
-
-    public KafkaSpoutMetrics(String topic, PartitionCoordinator coordinator) {
+   
+    public KafkaSpoutMetrics(String topic, PartitionCoordinator coordinator, Boolean debugSpoutMetrics) {
         _topic = topic;
         _coordinator = coordinator;
-        
+        _debugSpoutMetrics = debugSpoutMetrics;
         
         _metrics_to_report.turnOnRollingMetrics( metricPath ( "ackd" ));
-        /*
-		_metrics_to_report.turnOnRollingMetrics( metricPath ( "failed" ));
-		_metrics_to_report.turnOnRollingMetrics( metricPath ( "emitted" ));
-		_metrics_to_report.turnOnRollingMetrics( metricPath ( "failed/retries" ));   
-		_metrics_to_report.turnOnRollingMetrics( metricPath ( "pending" )); 
-		_metrics_to_report.turnOnRollingMetrics( metricPath ( "waitingToEmit" ));
-		 */
+        if (  _debugSpoutMetrics == false )
+        {
+			_metrics_to_report.turnOnRollingMetrics( metricPath ( "failed" ));
+			_metrics_to_report.turnOnRollingMetrics( metricPath ( "emitted" ));
+			_metrics_to_report.turnOnRollingMetrics( metricPath ( "failed/retries" ));   
+			_metrics_to_report.turnOnRollingMetrics( metricPath ( "pending" )); 
+			_metrics_to_report.turnOnRollingMetrics( metricPath ( "waitingToEmit" ));
+        }
     }
     
     public static KafkaSpoutMetrics registerMetric (final TopologyContext context, final SpoutConfig spoutConfig, @SuppressWarnings("rawtypes") final Map stormConf, final PartitionCoordinator coordinator, final DynamicPartitionConnections connections)
     {
-    	KafkaSpoutMetrics toRegister = new KafkaSpoutMetrics(spoutConfig.topic, coordinator);
+    	Boolean debugSpoutMetrics = false;
+    	KafkaSpoutMetrics toRegister = new KafkaSpoutMetrics(spoutConfig.topic, coordinator, debugSpoutMetrics);
         context.registerMetric("kafkaSpout", toRegister , spoutConfig.metricsTimeBucketSizeInSecs);
         
         registerMetric_KafkaOffset(context, spoutConfig, connections, coordinator);
@@ -152,23 +157,24 @@ public class KafkaSpoutMetrics implements IMetric {
     private void getInternallyManagedMetrics()
     {
     	_metrics_to_report.setTotalRunningValue( metricPath ( "ackd" ), _tuples_ackd_total);
-    	/*
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "failed" ) , _tuples_failed_total);
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "emitted" ) , _tuplesEmittedTotal);
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "failed/retries" ) , _tupleRetriesTotal);
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "emitted/wo_retries" ) , _tuplesEmittedTotal - _tupleRetriesTotal); //emitted includes retries.  emitted >= retries
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "emitted/wo_completed" ) , _tuplesEmittedTotal - ( _tuples_ackd_total + _tuples_failed_total ));
-    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "pending" ) , _tuplesTotal_Pending);
-    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "waitingToEmit" ) , _tuplesNow_WaitingToEmit);
-    	
-
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "removedBCMaxOffsetBehind/pending" ) , _tuplesTotal_RemovedBCMaxOffsetBehind_Pending);
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "removedBCMaxOffsetBehind/ackd" ) , _tuplesTotal_RemovedBCMaxOffsetBehind_Ackd);
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "removedBCMaxOffsetBehind/failed" ) , _tuplesTotal_RemovedBCMaxOffsetBehind_Failed);
-    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "failed/retries/awaiting" ) , _tuplesTotal_Failed_Retry_Awaiting);
-    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "failed/retries/retrying" ) , _tuplesTotal_Failed_Retry_Retrying);
-    	_metrics_to_report.setTotalRunningValue( metricPath ( "failed/retries/successful" ) , _tuplesTotal_Failed_Retry_Successful);
-    	*/
+    	if (  _debugSpoutMetrics == false )
+        {
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "failed" ) , _tuples_failed_total);
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "emitted" ) , _tuplesEmittedTotal);
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "failed/retries" ) , _tupleRetriesTotal);
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "emitted/wo_retries" ) , _tuplesEmittedTotal - _tupleRetriesTotal); //emitted includes retries.  emitted >= retries
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "emitted/wo_completed" ) , _tuplesEmittedTotal - ( _tuples_ackd_total + _tuples_failed_total ));
+	    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "pending" ) , _tuplesTotal_Pending);
+	    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "waitingToEmit" ) , _tuplesNow_WaitingToEmit);
+	    	
+	
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "removedBCMaxOffsetBehind/pending" ) , _tuplesTotal_RemovedBCMaxOffsetBehind_Pending);
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "removedBCMaxOffsetBehind/ackd" ) , _tuplesTotal_RemovedBCMaxOffsetBehind_Ackd);
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "removedBCMaxOffsetBehind/failed" ) , _tuplesTotal_RemovedBCMaxOffsetBehind_Failed);
+	    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "failed/retries/awaiting" ) , _tuplesTotal_Failed_Retry_Awaiting);
+	    	_metrics_to_report.setGaugesCurrentValue( metricPath ( "failed/retries/retrying" ) , _tuplesTotal_Failed_Retry_Retrying);
+	    	_metrics_to_report.setTotalRunningValue( metricPath ( "failed/retries/successful" ) , _tuplesTotal_Failed_Retry_Successful);
+        }
     }    
     
     
@@ -182,11 +188,6 @@ public class KafkaSpoutMetrics implements IMetric {
 
     		String partitionMetricName = partitionMetricPath(pm.getPartition());	
 
-    		/*
-    		 * remove from collection:
-    		 _metrics_to_report.setTotalRunningValue("partitionAckdTotal", partitionMetricName + "/ackd", pm.totalOfTuplesAcked());
-    		 _metrics_to_report.setTotalRunningValue("partitionTuplesFailed", partitionMetricName + "/failed", pm.totalOfTuplesFailed());
-    		 */
     	    _metrics_to_report.setTotalRunningValue("partitionTuplesRemovedBCMaxOffsetBehind-Pending", partitionMetricName + "/pending/removedFromPendingBCMaxOffsetBehind", pm.totalOfTuplesPendingRemoved_was_lt_MaxOffsetBehind());
 
     	    _metrics_to_report.setTotalRunningValue("partitionEmittedTotal", partitionMetricName + "/emitted", pm.totalOfTuplesEmitted());
@@ -287,30 +288,3 @@ public class KafkaSpoutMetrics implements IMetric {
     }    
     
 }
-
-
-
-/*
-//---------------------------------------------------------------
-List<PartitionManager> pms = _coordinator.getMyManagedPartitions();
-Map concatMetricsDataMaps = new HashMap();
-for (PartitionManager pm : pms) {
-    concatMetricsDataMaps.putAll(pm.getMetricsDataMap());
-}
-return concatMetricsDataMaps;    	
-//---------------------------------------------------------------
-ret.put(_topic + "/" + partition.getId() + "/" + "spoutLag", spoutLag);
-ret.put(_topic + "/" + partition.getId() + "/" + "earliestTimeOffset", earliestTimeOffset);
-ret.put(_topic + "/" + partition.getId() + "/" + "latestTimeOffset", latestTimeOffset);
-ret.put(_topic + "/" + partition.getId() + "/" + "latestEmittedOffset", latestEmittedOffset);
-
-
-    return ret;
-//return null;
-
-Partition partition = id.partition;
-Broker partition_host = partition.host;
-String broker_name = partition_host.toString();
-int partition_id = partition.partition;
-long offset = id.offset;
-*/

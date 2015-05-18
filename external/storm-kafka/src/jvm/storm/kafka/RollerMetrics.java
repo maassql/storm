@@ -46,7 +46,7 @@ public class RollerMetrics {
     	}
     	else
     	{
-    		_totalSlots = 1440;	//24 hours
+    		_totalSlots = 1442;	//24 hours
     	}
     	
     	_last_List_index = _totalSlots - 1;
